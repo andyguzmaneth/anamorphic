@@ -8,3 +8,6 @@ k256 = { version = "0.13", features = ["ecdh", "arithmetic"] }
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 rand = "0.8"
 hex = "0.4"
+aes-gcm = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
