@@ -11,6 +11,14 @@
 - `keccak256` and `pubkey_to_eth_address` are public in stealth_address module for reuse
 - Solc 0.8.21 has an internal Natspec compiler bug — pin `solc_version = "0.8.24"` in foundry.toml
 - StealthEscrow uses 7-day challenge period and 14-day recovery timeout (total 21 days before user recovery)
+- MockERC20 and MockAMM are in `contracts/src/` — use for testing swaps in later stories (US-009, US-010, US-011)
+- MockAMM constant-product formula: `amountOut = (amountIn * reserveOut) / (reserveIn + amountIn)` (no fees)
+- DeployMockAMM script creates TokenA, TokenB, MockAMM with 100k initial liquidity each
+- Circomlib Poseidon template: `Poseidon(nInputs)` supports up to 16 inputs; with 8 inputs t=9, produces 1171 constraints
+- circomlibjs npm package provides JS Poseidon implementation for computing expected hashes in test scripts
+- Circuit public inputs declared via `component main {public [field_name]} = Template()` syntax
+- `npx snarkjs wtns check <r1cs> <witness>` verifies witness satisfies all R1CS constraints
+- `scripts/compile.sh` compiles instruction_commitment circuit; `scripts/test_witness.sh` runs full witness test
 
 ---
 
@@ -75,4 +83,37 @@
   - StealthEscrow stores commitments with auto-incrementing ID via `nextCommitmentId++`
   - The `verifyAndRelease` function (for US-008 ZKP integration) is not yet added — will extend StealthEscrow when Groth16 verifier is ready
   - 12 tests cover: post commitment, event emission, low bond rejection, release after deadline, early release rejection, non-relayer release rejection, double release rejection, challenge, late challenge rejection, fund recovery after timeout, early recovery rejection, multiple commitments
+---
+
+## 2026-02-13 - US-005
+- What was implemented: MockERC20 (minimal ERC20 with public mint) and MockAMM (constant-product x*y=k AMM) contracts, deploy script, and comprehensive Foundry tests
+- Files changed:
+  - `contracts/src/MockERC20.sol` — minimal ERC20 with public mint, approve, transfer, transferFrom
+  - `contracts/src/MockAMM.sol` — constant-product AMM with addLiquidity, swap, getAmountOut; simple LP tracking (not ERC20)
+  - `contracts/script/DeployMockAMM.s.sol` — deploys TokenA, TokenB, MockAMM; mints tokens and adds 100k initial liquidity
+  - `contracts/test/MockAMM.t.sol` — 11 tests covering all acceptance criteria
+- **Learnings for future iterations:**
+  - MockAMM reserves are updated from actual balances after swap (`tokenA.balanceOf(address(this))`) — ensures reserves match reality even if tokens are sent directly
+  - Constant product formula: `amountOut = (amountIn * reserveOut) / (reserveIn + amountIn)` — no fees means k always increases slightly due to integer rounding
+  - MockERC20 uses `type(uint256).max` allowance check to support infinite approvals
+  - First LP deposit uses `amountA` as the LP baseline; subsequent deposits are proportional to existing reserves
+  - 11 tests cover: add liquidity, second LP provider, swap A→B, swap B→A, slippage revert, zero amount revert, getAmountOut correctness, invalid token revert, swap event emission, zero liquidity add revert, constant product invariant
+---
+
+## 2026-02-13 - US-006
+- What was implemented: Circom circuit for instruction commitment proof using Poseidon hash
+- Files changed:
+  - `circuits/instruction_commitment.circom` — ZK circuit: 8 private inputs (instruction fields) + 1 public input (commitment_hash), Poseidon(8) hash constraint
+  - `scripts/compile.sh` — compiles circuit to R1CS + WASM, logs constraint count via snarkjs
+  - `scripts/test_witness.sh` — generates witness with known test inputs and verifies against R1CS
+  - `scripts/compute_poseidon.js` — JS helper using circomlibjs to compute Poseidon hash and generate input.json
+  - `package.json` — added circomlibjs as devDependency
+- **Learnings for future iterations:**
+  - Poseidon(8) on BN128 produces 1171 constraints (78 template instances, 405 non-linear + 766 linear constraints)
+  - `Poseidon(nInputs)` in circomlib uses `PoseidonEx(nInputs, 1)` with `initialState=0` — supports up to 16 inputs
+  - The `N_ROUNDS_P` array in poseidon.circom has 16 entries for t=2..17, where t = nInputs + 1
+  - circomlibjs `buildPoseidon()` returns an async function; hash output needs `F.toObject(hash).toString()` to get the decimal string for input.json
+  - Circuit public inputs use syntax: `component main {public [commitment_hash]} = InstructionCommitment()`
+  - `npx snarkjs wtns check` verifies a witness satisfies all R1CS constraints — essential for testing
+  - The witness WASM generator is in `circuits/build/instruction_commitment_js/generate_witness.js`
 ---

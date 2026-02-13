@@ -90,7 +90,7 @@
         "forge test passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Keep it dead simple — no fees, no LP tokens as ERC20, no flash loans. This is just a test fixture. Use OpenZeppelin ERC20 as base for MockERC20 if available, otherwise implement minimal ERC20."
     },
     {
@@ -108,7 +108,7 @@
         "Constraint count logged to stdout"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Poseidon with 8 inputs may need to be split into multiple rounds depending on circomlib's Poseidon implementation (which supports up to ~16 inputs). Use the Poseidon hash from circomlib. Field elements are BN128 scalar field (< ~2^254)."
     },
     {
