@@ -17,7 +17,7 @@
         "Circom test circuit compiles to R1CS + WASM via circom compiler"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Use forge init for contracts. Use cargo new --lib for stealth-crypto and cargo new for relayer. npm init + npm install snarkjs circomlib for circuits tooling."
     },
     {
@@ -35,7 +35,7 @@
         "cargo test passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Use k256 crate for secp256k1 ECDH. Use tiny-keccak for hashing. Ethereum address = last 20 bytes of keccak256(uncompressed_pubkey[1:]). The ephemeral pubkey R is what gets embedded in the transaction data field."
     },
     {

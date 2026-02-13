@@ -1,0 +1,42 @@
+## Codebase Patterns
+- Use `~/.cargo/bin/circom` (v2.2.3) for circuit compilation — the npm `circom` (v0.5.46) is the deprecated JS version
+- Circom build output goes to `circuits/build/` (must create dir before compiling)
+- Foundry project lives in `contracts/` with forge-std as a git submodule
+- Rust workspace root is `relayer/Cargo.toml` with members: stealth-crypto (lib), relayer (bin)
+- Root `package.json` has snarkjs and circomlib as devDependencies
+- stealth-crypto uses k256 (secp256k1 ECDH/arithmetic), tiny-keccak (keccak256), rand, hex
+- Stealth address protocol: ECDH shared secret -> keccak256(compressed point) -> reduce to scalar -> scalar*G + spend_pubkey
+- `keccak256` and `pubkey_to_eth_address` are public in stealth_address module for reuse
+
+---
+
+## 2026-02-13 - US-001
+- What was implemented: Project scaffold with Foundry, Rust cargo workspace, and Circom directories
+- Files changed:
+  - `.gitignore` — project-wide ignores
+  - `contracts/` — Foundry project (forge init) with forge-std submodule
+  - `relayer/Cargo.toml` — workspace config
+  - `relayer/stealth-crypto/` — lib crate
+  - `relayer/relayer/` — bin crate
+  - `circuits/test_circuit.circom` — trivial Multiplier circuit
+  - `package.json` — snarkjs + circomlib devDeps
+- **Learnings for future iterations:**
+  - `forge init` creates its own git repo — need to remove `.git` dir and re-add forge-std as submodule of parent
+  - Circom Rust compiler must be built from source (`git clone https://github.com/iden3/circom.git && cargo build --release`)
+  - The npm circom package is deprecated v0.5.46; always use `~/.cargo/bin/circom` (v2.2.3)
+  - Circom requires output directory to exist before compilation (`mkdir -p circuits/build/`)
+---
+
+## 2026-02-13 - US-002
+- What was implemented: Stealth address library in Rust using ECDH on secp256k1
+- Files changed:
+  - `relayer/stealth-crypto/Cargo.toml` — added k256, tiny-keccak, rand, hex dependencies
+  - `relayer/stealth-crypto/src/lib.rs` — module re-export
+  - `relayer/stealth-crypto/src/stealth_address.rs` — full stealth address implementation
+- **Learnings for future iterations:**
+  - k256 `PublicKey::as_affine()` returns a reference; use `*pubkey.as_affine()` to copy into `ProjectivePoint::from()`
+  - `Scalar::reduce()` requires `k256::elliptic_curve::ops::Reduce` trait import and `k256::U256::from_be_slice()`
+  - ECDH shared secret is computed as `keccak256(compressed_point_encoding)` — both sides get identical results because scalar multiplication is commutative: r*V = r*(v*G) = v*(r*G) = v*R
+  - The `user_generate_stealth` function returns the shared_secret alongside the StealthAddress — this is needed for instruction encryption in US-003
+  - 8 tests cover: key gen, ECDH agreement, stealth derivation, private key recovery, deterministic output, different ephemeral keys, wrong relayer rejection, address format
+---
