@@ -19,6 +19,12 @@
 - Circuit public inputs declared via `component main {public [field_name]} = Template()` syntax
 - `npx snarkjs wtns check <r1cs> <witness>` verifies witness satisfies all R1CS constraints
 - `scripts/compile.sh` compiles instruction_commitment circuit; `scripts/test_witness.sh` runs full witness test
+- Execution proof circuit has 1376 constraints (86 template instances): Poseidon(8) + IsEqual + GreaterEqThan(128) + LessEqThan(64)
+- Groth16 setup: `powersoftau new bn128 16` -> contribute -> prepare phase2 -> groth16 setup -> zkey contribute -> export verificationkey + solidityverifier
+- snarkjs auto-generated Groth16Verifier.sol uses `pragma solidity >=0.7.0 <0.9.0` — compatible with 0.8.24
+- Groth16Verifier.verifyProof signature: `(uint[2] calldata _pA, uint[2][2] calldata _pB, uint[2] calldata _pC, uint[N] calldata _pubSignals)` where N = number of public inputs
+- Proving/verification key files in `circuits/build/`: `execution_proof_final.zkey`, `verification_key.json`
+- Public signals order in snarkjs output follows circom main component's `{public [...]}` declaration order
 
 ---
 
@@ -116,4 +122,24 @@
   - Circuit public inputs use syntax: `component main {public [commitment_hash]} = InstructionCommitment()`
   - `npx snarkjs wtns check` verifies a witness satisfies all R1CS constraints — essential for testing
   - The witness WASM generator is in `circuits/build/instruction_commitment_js/generate_witness.js`
+---
+
+## 2026-02-13 - US-007
+- What was implemented: Execution correctness proof circuit with Groth16 trusted setup, Solidity verifier, and full test suite
+- Files changed:
+  - `circuits/execution_proof.circom` — ZK circuit: 8 private instruction fields + 2 private execution results + 4 public inputs; constraints: commitment hash, recipient match, sufficient output, within deadline
+  - `scripts/compile_execution_proof.sh` — compiles execution_proof circuit to R1CS + WASM
+  - `scripts/setup_groth16.sh` — full Groth16 trusted setup: powers of tau (BN128 2^16), circuit-specific phase 2, exports proving key + verification key + Solidity verifier
+  - `scripts/compute_execution_inputs.js` — generates input.json for execution proof circuit with optional `--wrong-recipient` flag for negative tests
+  - `scripts/test_execution_proof.sh` — two tests: (1) valid proof generation + snarkjs verify, (2) invalid inputs (wrong recipient) correctly rejected at witness generation
+  - `contracts/src/Groth16Verifier.sol` — auto-generated Solidity verifier from snarkjs (verifyProof with 4 public signals)
+  - `tasks/prd.json` — marked US-007 passes: true
+- **Learnings for future iterations:**
+  - Execution proof circuit uses IsEqual, GreaterEqThan(128), LessEqThan(64) from circomlib's comparators.circom — all take `in[2]` array and output binary 0/1
+  - Circuit has 1376 constraints (vs 1171 for instruction_commitment alone): extra 205 from comparators
+  - Powers of tau ceremony is slow (~3-5 minutes for 2^16) — the FFT computation dominates
+  - snarkjs Groth16 verifier's `_pubSignals` array size is hardcoded to match the circuit's public input count (4 for execution_proof)
+  - Invalid recipient causes assertion failure at witness generation (not at proof verification) — the circom runtime catches constraint violations before a proof is even generated
+  - `--wrong-recipient` flag in test script changes `expected_recipient` to a bogus value while keeping the same commitment hash — this triggers the `recipientCheck.out === 1` constraint failure
+  - Groth16 setup generates ~40MB of intermediate files (ptau files) in circuits/build/ — these are gitignored
 ---

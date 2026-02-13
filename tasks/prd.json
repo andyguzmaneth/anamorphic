@@ -127,7 +127,7 @@
         "Test: attempt proof with invalid inputs (wrong recipient) — witness generation fails"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "For powers of tau, use snarkjs powersoftau new bn128 16 (2^16 = 65536 constraints should be enough). The comparators (LessEqThan, IsEqual) come from circomlib. Solidity verifier goes into contracts/src/Groth16Verifier.sol."
     },
     {
