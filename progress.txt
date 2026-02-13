@@ -4,9 +4,13 @@
 - Foundry project lives in `contracts/` with forge-std as a git submodule
 - Rust workspace root is `relayer/Cargo.toml` with members: stealth-crypto (lib), relayer (bin)
 - Root `package.json` has snarkjs and circomlib as devDependencies
-- stealth-crypto uses k256 (secp256k1 ECDH/arithmetic), tiny-keccak (keccak256), rand, hex
+- stealth-crypto uses k256 (secp256k1 ECDH/arithmetic), tiny-keccak (keccak256), rand, hex, aes-gcm, hkdf, sha2
+- Instruction module: `Instruction` struct serializes to 141 bytes fixed-width big-endian; `encrypt_instruction` / `decrypt_instruction` use HKDF(shared_secret) -> AES-256-GCM
+- Encryption format: nonce (12 bytes) || ciphertext || GCM tag — aes-gcm crate appends tag to ciphertext internally
 - Stealth address protocol: ECDH shared secret -> keccak256(compressed point) -> reduce to scalar -> scalar*G + spend_pubkey
 - `keccak256` and `pubkey_to_eth_address` are public in stealth_address module for reuse
+- Solc 0.8.21 has an internal Natspec compiler bug — pin `solc_version = "0.8.24"` in foundry.toml
+- StealthEscrow uses 7-day challenge period and 14-day recovery timeout (total 21 days before user recovery)
 
 ---
 
@@ -39,4 +43,36 @@
   - ECDH shared secret is computed as `keccak256(compressed_point_encoding)` — both sides get identical results because scalar multiplication is commutative: r*V = r*(v*G) = v*(r*G) = v*R
   - The `user_generate_stealth` function returns the shared_secret alongside the StealthAddress — this is needed for instruction encryption in US-003
   - 8 tests cover: key gen, ECDH agreement, stealth derivation, private key recovery, deterministic output, different ephemeral keys, wrong relayer rejection, address format
+---
+
+## 2026-02-13 - US-003
+- What was implemented: Instruction encryption module with AES-256-GCM and HKDF key derivation
+- Files changed:
+  - `relayer/stealth-crypto/Cargo.toml` — added aes-gcm, hkdf, sha2 dependencies
+  - `relayer/stealth-crypto/src/lib.rs` — added instruction module export
+  - `relayer/stealth-crypto/src/instruction.rs` — Instruction struct, serialization, encryption, decryption, commitment
+  - `relayer/Cargo.lock` — updated lockfile
+- **Learnings for future iterations:**
+  - aes-gcm crate appends the 16-byte GCM authentication tag to the ciphertext internally — no need to handle it separately
+  - `Nonce::from_slice` triggers a deprecation warning from generic-array 0.x in aes-gcm 0.10 — this is upstream and can be ignored
+  - HKDF with `info=b"stealth-defi-encryption"` and no salt is used for key derivation — keep consistent across Rust and any future Solidity/JS implementations
+  - Instruction serialization is 141 bytes: 1 (action_type) + 20*3 (addresses) + 32*2 (U256s) + 8*2 (u64s)
+  - The `commitment()` function reuses the existing `keccak256` from `stealth_address` module — imported via `crate::keccak256`
+  - 8 tests cover: serialization round-trip, encryption round-trip, wrong key, tampered ciphertext (GCM auth), deterministic commitment, different nonces, HKDF determinism, wrong-length deserialization
+---
+
+## 2026-02-13 - US-004
+- What was implemented: StealthEscrow.sol — commitment + bond contract with challenge period and fund recovery
+- Files changed:
+  - `contracts/src/StealthEscrow.sol` — main contract: postCommitment, releaseBond, challenge, recoverFunds
+  - `contracts/test/StealthEscrow.t.sol` — 12 Foundry tests covering all acceptance criteria
+  - `contracts/foundry.toml` — pinned solc_version to 0.8.24 (0.8.21 has Natspec ICE bug)
+- **Learnings for future iterations:**
+  - Solc 0.8.21 (Foundry nightly default) triggers an Internal Compiler Error on Natspec processing — fix by pinning `solc_version = "0.8.24"` in foundry.toml
+  - `vm.warp(block.timestamp + N)` in Foundry tests manipulates block timestamp for time-based tests
+  - `vm.deal(addr, amount)` pre-funds test addresses with ETH
+  - `vm.expectEmit(true, true, false, true)` followed by `emit Event(...)` pattern verifies event emission
+  - StealthEscrow stores commitments with auto-incrementing ID via `nextCommitmentId++`
+  - The `verifyAndRelease` function (for US-008 ZKP integration) is not yet added — will extend StealthEscrow when Groth16 verifier is ready
+  - 12 tests cover: post commitment, event emission, low bond rejection, release after deadline, early release rejection, non-relayer release rejection, double release rejection, challenge, late challenge rejection, fund recovery after timeout, early recovery rejection, multiple commitments
 ---

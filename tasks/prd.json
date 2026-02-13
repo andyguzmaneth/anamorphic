@@ -53,7 +53,7 @@
         "cargo test passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Use aes-gcm crate for encryption, hkdf + sha2 for key derivation. The nonce must be prepended to ciphertext so the receiver knows it. U256 can use ethers-core or alloy-primitives."
     },
     {
@@ -72,7 +72,7 @@
         "forge test passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Use forge-std for testing (vm.warp, vm.prank, vm.deal). Challenge mechanism is a placeholder — full implementation comes with ZKP integration in US-008."
     },
     {
