@@ -1,0 +1,3 @@
+[workspace]
+members = ["stealth-crypto", "relayer"]
+resolver = "2"

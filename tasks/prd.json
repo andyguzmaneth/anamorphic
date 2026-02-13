@@ -1,0 +1,249 @@
+{
+  "project": "StealthDeFi",
+  "branchName": "ralph/stealth-defi-v1",
+  "description": "Exploratory prototype for privacy-preserving DeFi execution on public blockchains. Transactions look like normal ETH transfers using stealth addresses + encrypted instructions + bonded relayers + ZK proofs. Approach A: single optimistic relayer with Groth16 proof of correct execution. Local Foundry/Anvil only.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Project scaffold — Foundry + Rust + Circom",
+      "description": "As a developer, I need a monorepo with Foundry (Solidity), Rust (cargo workspace), and Circom directories so all components can be built from one place.",
+      "acceptanceCriteria": [
+        "contracts/ directory with Foundry project (foundry.toml, src/, test/, script/) — forge build passes",
+        "relayer/ directory with Rust cargo workspace containing two crates: stealth-crypto (lib) and relayer (bin)",
+        "circuits/ directory with a trivial test circuit (e.g., signal constraint) that compiles with circom",
+        "package.json at root with snarkjs and circomlib as devDependencies",
+        "forge build passes with zero errors",
+        "cargo build passes with zero errors",
+        "Circom test circuit compiles to R1CS + WASM via circom compiler"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Use forge init for contracts. Use cargo new --lib for stealth-crypto and cargo new for relayer. npm init + npm install snarkjs circomlib for circuits tooling."
+    },
+    {
+      "id": "US-002",
+      "title": "Stealth address library (Rust)",
+      "description": "As a developer, I need a Rust library that generates stealth addresses using ECDH on secp256k1, so users can send funds to unlinkable one-time addresses that only the relayer can spend.",
+      "acceptanceCriteria": [
+        "stealth-crypto crate with StealthAddress module",
+        "RelayerKeys struct: spend keypair (privkey + pubkey) + view keypair (privkey + pubkey) — the meta-address",
+        "User generates ephemeral keypair, computes ECDH shared secret with relayer's view pubkey",
+        "Stealth address derived: ethereum address of (hash(shared_secret) * G + relayer_spend_pubkey)",
+        "Relayer computes stealth private key: hash(shared_secret) + relayer_spend_privkey",
+        "Function to check if a tx was sent to a relayer's stealth address given the ephemeral pubkey",
+        "5+ unit tests: key generation, shared secret agreement, stealth derivation, private key recovery, deterministic output for fixed seed",
+        "cargo test passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use k256 crate for secp256k1 ECDH. Use tiny-keccak for hashing. Ethereum address = last 20 bytes of keccak256(uncompressed_pubkey[1:]). The ephemeral pubkey R is what gets embedded in the transaction data field."
+    },
+    {
+      "id": "US-003",
+      "title": "Instruction encryption (Rust)",
+      "description": "As a developer, I need to encrypt DeFi instructions with the ECDH shared secret so only the intended relayer can read them.",
+      "acceptanceCriteria": [
+        "Instruction struct: action_type (u8), token_in ([u8;20]), token_out ([u8;20]), amount_in (U256), min_amount_out (U256), recipient ([u8;20]), deadline (u64), nonce (u64)",
+        "Deterministic serialization to bytes (big-endian, fixed-width fields)",
+        "Encryption key derived from shared secret via HKDF-SHA256 with info='stealth-defi-encryption'",
+        "AES-256-GCM encryption with random 12-byte nonce, returns nonce || ciphertext || tag",
+        "Decrypt function recovers original Instruction struct",
+        "commitment() function returns keccak256(serialized_instruction)",
+        "Unit tests: round-trip, wrong key fails, tampered ciphertext fails (GCM auth), commitment deterministic, different nonces produce different ciphertexts",
+        "cargo test passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Use aes-gcm crate for encryption, hkdf + sha2 for key derivation. The nonce must be prepended to ciphertext so the receiver knows it. U256 can use ethers-core or alloy-primitives."
+    },
+    {
+      "id": "US-004",
+      "title": "Commitment and bond contract (Solidity)",
+      "description": "As a relayer, I need a smart contract where I post a bond alongside my execution commitment, so users have economic guarantees of correct execution.",
+      "acceptanceCriteria": [
+        "StealthEscrow.sol with postCommitment(bytes32 commitment) payable — relayer sends ETH bond",
+        "Commitment struct stored: commitment hash, bond amount (msg.value), relayer address, challengeDeadline (block.timestamp + 7 days), zkpVerified (bool), released (bool)",
+        "releaseBond(uint256 id) — callable by relayer after challengeDeadline, transfers bond back",
+        "challenge(uint256 id) — placeholder for challenge logic (just emits event for now)",
+        "recoverFunds(uint256 id) payable — user recovery after 14-day timeout if relayer disappeared",
+        "Minimum bond enforced (configurable, default 1 ether)",
+        "Events: CommitmentPosted, BondReleased, ChallengeSubmitted, FundsRecovered",
+        "Foundry tests: post commitment, release after deadline (warp time), reject early release, recovery after timeout, reject low bond",
+        "forge test passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Use forge-std for testing (vm.warp, vm.prank, vm.deal). Challenge mechanism is a placeholder — full implementation comes with ZKP integration in US-008."
+    },
+    {
+      "id": "US-005",
+      "title": "Mock AMM contract (Solidity)",
+      "description": "As a developer, I need a simple AMM pool for testing swaps locally since we can't fork mainnet Uniswap.",
+      "acceptanceCriteria": [
+        "MockERC20.sol — minimal ERC20 with public mint(address to, uint256 amount) function",
+        "MockAMM.sol — constant-product AMM (x * y = k) with two tokens set at construction",
+        "addLiquidity(uint256 amountA, uint256 amountB) — transfers both tokens from sender, mints LP tracking",
+        "swap(address tokenIn, uint256 amountIn, uint256 minAmountOut) — constant product swap with slippage check",
+        "getAmountOut(address tokenIn, uint256 amountIn) view — preview swap output",
+        "Deploy script: creates TokenA, TokenB, AMM, mints tokens to deployer, adds initial liquidity",
+        "Foundry tests: add liquidity, swap A to B, swap B to A, slippage revert, zero amount revert",
+        "forge test passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Keep it dead simple — no fees, no LP tokens as ERC20, no flash loans. This is just a test fixture. Use OpenZeppelin ERC20 as base for MockERC20 if available, otherwise implement minimal ERC20."
+    },
+    {
+      "id": "US-006",
+      "title": "Circom circuit — instruction commitment proof",
+      "description": "As a developer, I need a ZK circuit that proves an instruction matches a public commitment hash without revealing the instruction content.",
+      "acceptanceCriteria": [
+        "circuits/instruction_commitment.circom using circomlib's Poseidon hasher",
+        "Private inputs: action_type, token_in, token_out, amount_in, min_amount_out, recipient, deadline, nonce (each as field element)",
+        "Public input: commitment_hash",
+        "Constraint: Poseidon(action_type, token_in, token_out, amount_in, min_amount_out, recipient, deadline, nonce) === commitment_hash",
+        "Circuit compiles with circom, R1CS and WASM generated",
+        "scripts/compile.sh compiles the circuit",
+        "scripts/test_witness.sh generates a witness with known test inputs and verifies it",
+        "Constraint count logged to stdout"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Poseidon with 8 inputs may need to be split into multiple rounds depending on circomlib's Poseidon implementation (which supports up to ~16 inputs). Use the Poseidon hash from circomlib. Field elements are BN128 scalar field (< ~2^254)."
+    },
+    {
+      "id": "US-007",
+      "title": "Circom circuit — execution correctness proof",
+      "description": "As a developer, I need a ZK circuit that proves the relayer executed correctly (right recipient, sufficient output, within deadline) without revealing instruction details.",
+      "acceptanceCriteria": [
+        "circuits/execution_proof.circom — includes instruction commitment as sub-circuit",
+        "Additional private inputs: execution_amount_out, execution_timestamp",
+        "Additional public inputs: expected_recipient, min_expected_amount, max_deadline",
+        "Constraints: (1) instruction commitment matches public hash, (2) recipient from instruction == expected_recipient, (3) execution_amount_out >= min_amount_out from instruction, (4) execution_timestamp <= deadline from instruction",
+        "Groth16 trusted setup: powers of tau ceremony (BN128, sufficient for circuit size)",
+        "Proving key and verification key generated",
+        "Solidity verifier contract auto-generated via snarkjs export solidityverifier",
+        "Test: generate proof with valid inputs, verify with snarkjs verify — passes",
+        "Test: attempt proof with invalid inputs (wrong recipient) — witness generation fails"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "For powers of tau, use snarkjs powersoftau new bn128 16 (2^16 = 65536 constraints should be enough). The comparators (LessEqThan, IsEqual) come from circomlib. Solidity verifier goes into contracts/src/Groth16Verifier.sol."
+    },
+    {
+      "id": "US-008",
+      "title": "On-chain ZKP verifier integration (Solidity)",
+      "description": "As a relayer, I want to submit a ZK proof to skip the 7-day challenge period and get my bond released immediately.",
+      "acceptanceCriteria": [
+        "Groth16Verifier.sol from snarkjs export placed in contracts/src/",
+        "StealthEscrow.sol updated with verifyAndRelease(uint256 commitmentId, uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c, uint256[] memory publicInputs)",
+        "verifyAndRelease calls Groth16Verifier.verifyProof — if valid, sets zkpVerified=true and releases bond immediately",
+        "If proof invalid — reverts, bond stays locked",
+        "Foundry test with a real Groth16 proof (generated from circuit in US-007): submit proof, verify bond released",
+        "Foundry test: submit garbage proof, verify revert",
+        "forge test passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "The tricky part is getting a real proof into Foundry tests. Options: (1) hardcode proof values from a snarkjs run, (2) use ffi cheatcode to call snarkjs from Foundry test. Option 1 is simpler for a prototype."
+    },
+    {
+      "id": "US-009",
+      "title": "Rust relayer — Anvil monitoring and stealth detection",
+      "description": "As a relayer, I need to watch the local chain for incoming stealth transfers, detect them using my view key, and decrypt the embedded instructions.",
+      "acceptanceCriteria": [
+        "relayer binary connects to local Anvil node via JSON-RPC (ethers-rs or alloy)",
+        "Polls new blocks (or subscribes to newHeads) for ETH transfers",
+        "For each transfer: checks if calldata starts with 33-byte compressed ephemeral pubkey",
+        "Computes ECDH shared secret, derives expected stealth address, checks against tx recipient",
+        "On match: decrypts instruction from remaining calldata using shared secret",
+        "Logs: matched stealth transfer detected, decoded instruction fields",
+        "Handles gracefully: no matching txs, malformed calldata, RPC connection errors",
+        "Integration test on Anvil: deploy nothing, just send raw ETH tx with stealth payload, verify relayer detects it",
+        "cargo test passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Use ethers-rs Provider with HTTP transport for Anvil. Anvil default URL: http://127.0.0.1:8545. The relayer needs its own keypair loaded from env or config file. For the integration test, start Anvil as a child process or assume it's running."
+    },
+    {
+      "id": "US-010",
+      "title": "Rust relayer — execute swap and post proof",
+      "description": "As a relayer, after detecting a stealth instruction, I need to execute the swap on the mock AMM and post a ZK proof to the escrow contract.",
+      "acceptanceCriteria": [
+        "Relayer derives stealth private key, creates wallet from it",
+        "Sends tx from stealth address to transfer received ETH (or wrap/swap as needed by instruction)",
+        "Calls MockAMM.swap() with instruction parameters (token_in, amount_in, min_amount_out)",
+        "Transfers swapped tokens to instruction.recipient",
+        "Computes instruction commitment (keccak256)",
+        "Calls StealthEscrow.postCommitment() with bond",
+        "Generates Groth16 proof by shelling out to snarkjs (or using ark-circom if feasible)",
+        "Calls StealthEscrow.verifyAndRelease() with the proof",
+        "All steps logged with tx hashes",
+        "Integration test on Anvil with deployed contracts: full flow from detection to bond release",
+        "cargo test passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "For ZKP generation, shelling out to snarkjs via Command::new('node') is the simplest approach. Write input.json, run snarkjs groth16 fullprove, read proof.json. The relayer needs ABI bindings for StealthEscrow and MockAMM — generate with forge bind or manually define."
+    },
+    {
+      "id": "US-011",
+      "title": "End-to-end integration test",
+      "description": "As a developer, I need a single script that runs the complete protocol flow on local Anvil to prove the system works.",
+      "acceptanceCriteria": [
+        "Shell script (scripts/e2e.sh) or Rust integration test that runs the full flow:",
+        "1. Starts Anvil (or connects to running instance on 8545)",
+        "2. Deploys: MockERC20 x2, MockAMM (with liquidity), StealthEscrow, Groth16Verifier",
+        "3. Generates relayer keypairs and user ephemeral keypair",
+        "4. User derives stealth address, encrypts swap instruction, sends ETH + encrypted data",
+        "5. Relayer detects stealth transfer, decrypts instruction",
+        "6. Relayer executes swap on MockAMM, sends tokens to recipient",
+        "7. Relayer posts commitment + bond, generates ZKP, submits proof",
+        "8. Asserts: bond released, recipient received tokens, events emitted correctly",
+        "Prints summary: gas cost per step, total gas, proof generation time",
+        "Exit code 0 on success, non-zero on any assertion failure"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "This is the money shot for the dissertation. If this passes, the protocol works. A shell script orchestrating forge script + cargo run is fine. Alternatively, a single Rust binary that does everything is cleaner."
+    },
+    {
+      "id": "US-012",
+      "title": "Privacy analysis",
+      "description": "As a researcher, I need to analyze the on-chain footprint to evaluate whether stealth transfers are distinguishable from normal ETH transfers.",
+      "acceptanceCriteria": [
+        "Script (Python or Rust) that reads on-chain state from Anvil after e2e test",
+        "Analysis 1 — Linkability: examines all txs, checks if sender address appears linked to final recipient in any on-chain data",
+        "Analysis 2 — Distinguishability: compares stealth transfer (gas, calldata size, value) vs a normal ETH transfer baseline",
+        "Analysis 3 — Relayer footprint: checks if relayer's execution txs are linkable to original deposit by timing, value, or address reuse",
+        "Comparison table: gas overhead of stealth swap vs direct AMM swap",
+        "Output: analysis/privacy-report.md with findings and metrics table",
+        "Script runs without errors"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Use cast or eth_getBlock/eth_getTransaction RPC calls to pull tx data from Anvil. The analysis doesn't need to be sophisticated — basic heuristics are fine for a prototype. The key finding to prove: no deterministic on-chain link between deposit tx and swap output."
+    },
+    {
+      "id": "US-013",
+      "title": "Benchmark suite",
+      "description": "As a researcher, I need quantitative benchmarks for the dissertation's evaluation chapter.",
+      "acceptanceCriteria": [
+        "Script that measures: gas cost per operation (stealth transfer, commitment, proof verification, bond release)",
+        "ZKP circuit constraint count",
+        "Proof generation time (average of 10 runs)",
+        "Proof size in bytes",
+        "End-to-end latency from deposit tx to bond release",
+        "Gas overhead: stealth swap total gas vs direct MockAMM.swap() gas (percentage)",
+        "Output: benchmarks/results.csv with raw numbers",
+        "Output: benchmarks/results.md with formatted comparison table",
+        "All measurements automated, no manual steps",
+        "Script runs without errors"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Run proof generation 10 times and take average + stddev. Gas costs can be pulled from tx receipts. For comparison, deploy a second scenario where user just calls MockAMM.swap() directly and measure that gas."
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+# Node
+node_modules/
+package-lock.json
+
+# Rust
+relayer/target/
+
+# Foundry
+contracts/cache/
+contracts/out/
+
+# Circom build artifacts
+circuits/build/
+
+# OS
+.DS_Store
