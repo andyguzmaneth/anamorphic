@@ -11,6 +11,7 @@ use tiny_keccak::{Hasher, Keccak};
 /// Relayer's long-lived keypairs (the "meta-address").
 /// - spend keypair: used to derive stealth private keys
 /// - view keypair: used for ECDH shared secret computation
+#[derive(Clone)]
 pub struct RelayerKeys {
     pub spend_privkey: SecretKey,
     pub spend_pubkey: PublicKey,

@@ -25,6 +25,9 @@
 - Groth16Verifier.verifyProof signature: `(uint[2] calldata _pA, uint[2][2] calldata _pB, uint[2] calldata _pC, uint[N] calldata _pubSignals)` where N = number of public inputs
 - Proving/verification key files in `circuits/build/`: `execution_proof_final.zkey`, `verification_key.json`
 - Public signals order in snarkjs output follows circom main component's `{public [...]}` declaration order
+- **Groth16 proof B-point Fp2 ordering**: snarkjs proof.json stores pi_b as `[[c0, c1], [c0, c1]]` but the EVM bn128 pairing precompile expects `[[c1, c0], [c1, c0]]` — use `npx snarkjs zkey export soliditycalldata` to get correct Solidity ordering
+- StealthEscrow constructor takes Groth16Verifier address: `new StealthEscrow(address(verifier))` — deploy verifier first
+- `verifyAndRelease` uses `memory` arrays internally; external call to verifier with `calldata` params works fine via ABI encoding
 
 ---
 
@@ -142,4 +145,19 @@
   - Invalid recipient causes assertion failure at witness generation (not at proof verification) — the circom runtime catches constraint violations before a proof is even generated
   - `--wrong-recipient` flag in test script changes `expected_recipient` to a bogus value while keeping the same commitment hash — this triggers the `recipientCheck.out === 1` constraint failure
   - Groth16 setup generates ~40MB of intermediate files (ptau files) in circuits/build/ — these are gitignored
+---
+
+## 2026-02-13 - US-008
+- What was implemented: On-chain ZKP verifier integration — StealthEscrow now accepts Groth16 proofs to instantly release relayer bonds, bypassing the 7-day challenge period
+- Files changed:
+  - `contracts/src/StealthEscrow.sol` — added Groth16Verifier import, immutable verifier in constructor, `verifyAndRelease()` function, `ZkpVerified` event
+  - `contracts/test/StealthEscrow.t.sol` — updated setUp to deploy Groth16Verifier, added 6 new tests: valid proof releases bond, events emitted, invalid proof reverts, non-relayer rejected, double release rejected, early release via ZKP works
+  - `tasks/prd.json` — marked US-008 passes: true
+- **Learnings for future iterations:**
+  - Groth16 proof.json `pi_b` uses `[c0, c1]` ordering per G2 pair, but the EVM bn128 pairing precompile expects `[c1, c0]` — always use `npx snarkjs zkey export soliditycalldata` to get the correct Solidity-compatible values
+  - The ecpairing precompile at address 0x08 returns a `PrecompileError` (not false) when given incorrectly ordered G2 points — this manifests as the verifier returning false
+  - StealthEscrow's `verifyAndRelease` uses `memory` arrays which get ABI-encoded into `calldata` when making the external call to Groth16Verifier — no incompatibility
+  - For garbage/invalid proof values (e.g., small integers like 1,2,3), the ecpairing precompile also errors because the points aren't on the curve — the verifier returns false, triggering the "Invalid proof" revert
+  - Hardcoding proof values (Option 1 from PRD notes) works well for prototype testing — 6 tests with real + garbage proofs give good coverage
+  - Gas cost for verifyAndRelease with valid proof: ~409k gas (including ecpairing precompile call)
 ---

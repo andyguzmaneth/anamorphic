@@ -144,7 +144,7 @@
         "forge test passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "The tricky part is getting a real proof into Foundry tests. Options: (1) hardcode proof values from a snarkjs run, (2) use ffi cheatcode to call snarkjs from Foundry test. Option 1 is simpler for a prototype."
     },
     {

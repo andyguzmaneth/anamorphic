@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import {Groth16Verifier} from "./Groth16Verifier.sol";
+
 contract StealthEscrow {
     struct Commitment {
         bytes32 commitmentHash;
@@ -15,6 +17,8 @@ contract StealthEscrow {
     uint256 public constant CHALLENGE_PERIOD = 7 days;
     uint256 public constant RECOVERY_TIMEOUT = 14 days;
 
+    Groth16Verifier public immutable verifier;
+
     uint256 public nextCommitmentId;
     mapping(uint256 => Commitment) public commitments;
 
@@ -22,6 +26,11 @@ contract StealthEscrow {
     event BondReleased(uint256 indexed id, address indexed relayer, uint256 bondAmount);
     event ChallengeSubmitted(uint256 indexed id, address indexed challenger);
     event FundsRecovered(uint256 indexed id, address indexed recoverer, uint256 amount);
+    event ZkpVerified(uint256 indexed id, address indexed relayer);
+
+    constructor(address _verifier) {
+        verifier = Groth16Verifier(_verifier);
+    }
 
     function postCommitment(bytes32 commitment) external payable returns (uint256) {
         require(msg.value >= minimumBond, "Bond below minimum");
@@ -71,6 +80,30 @@ contract StealthEscrow {
         uint256 amount = c.bondAmount;
 
         emit FundsRecovered(id, msg.sender, amount);
+        (bool success,) = msg.sender.call{value: amount}("");
+        require(success, "Transfer failed");
+    }
+
+    function verifyAndRelease(
+        uint256 commitmentId,
+        uint256[2] memory a,
+        uint256[2][2] memory b,
+        uint256[2] memory c,
+        uint256[4] memory publicInputs
+    ) external {
+        Commitment storage cm = commitments[commitmentId];
+        require(cm.relayer == msg.sender, "Not the relayer");
+        require(!cm.released, "Already released");
+
+        bool valid = verifier.verifyProof(a, b, c, publicInputs);
+        require(valid, "Invalid proof");
+
+        cm.zkpVerified = true;
+        cm.released = true;
+        uint256 amount = cm.bondAmount;
+
+        emit ZkpVerified(commitmentId, msg.sender);
+        emit BondReleased(commitmentId, msg.sender, amount);
         (bool success,) = msg.sender.call{value: amount}("");
         require(success, "Transfer failed");
     }
