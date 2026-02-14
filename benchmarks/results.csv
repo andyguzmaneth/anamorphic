@@ -1,0 +1,14 @@
+metric,value,unit
+gas_stealth_transfer,29050,gas
+gas_token_approve,46711,gas
+gas_token_swap,91532,gas
+gas_token_transfer,47665,gas
+gas_post_commitment,140486,gas
+gas_verify_release,287885,gas
+gas_total_stealth,643329,gas
+gas_baseline_swap,79232,gas
+gas_overhead_percent,711.96,%
+circuit_constraints,1376,count
+proof_generation_avg_ms,1970.00,ms
+proof_generation_stddev_ms,250.00,ms
+proof_size_bytes,803,bytes
