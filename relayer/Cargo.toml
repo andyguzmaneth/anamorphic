@@ -1,3 +1,3 @@
 [workspace]
-members = ["stealth-crypto", "relayer"]
+members = ["stealth-crypto", "relayer", "e2e-test"]
 resolver = "2"

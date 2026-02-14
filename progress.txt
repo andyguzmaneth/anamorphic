@@ -203,3 +203,26 @@
   - cargo test passes with 16 unit tests in stealth-crypto + 1 non-ignored test in relayer (US-009 test is marked #[ignore])
 ---
 
+## 2026-02-13 - US-011
+- What was implemented: End-to-end integration test — full protocol flow from deployment to bond release with gas metrics and assertions
+- Files changed:
+  - `relayer/e2e-test/Cargo.toml` — new binary crate with ethers, tokio, anyhow, stealth-crypto dependencies
+  - `relayer/e2e-test/src/main.rs` — comprehensive E2E test: Anvil orchestration, contract deployment, stealth transfer, relayer execution, ZK proof generation, metrics collection
+  - `scripts/compute_poseidon.js` — updated to accept JSON via command-line for dynamic Poseidon hash computation
+- **Learnings for future iterations:**
+  - E2E test manages Anvil lifecycle: spawns child process, waits 2s for startup, kills on Drop
+  - Anvil deterministic accounts used: deployer=0xf39..., user=0x7099...
+  - Contract deployment order matters: Groth16Verifier first, then StealthEscrow(verifier_address)
+  - MockERC20.mint() used to pre-fund stealth address with tokens for testing (normally user would send tokens)
+  - Circuit uses Poseidon for commitment_hash (NOT keccak256) — must compute via circomlibjs Node.js script
+  - Circuit paths are relative to `relayer/` directory when running e2e-test — use `std::env::current_dir()?.parent()` to get project root
+  - snarkjs stderr shows warnings (Node ES module) but actual error is in stdout — capture both for debugging
+  - Circuit assertion failures (line 63: `commitment_hash === hasher.out`) indicate hash mismatch, not witness generation failure
+  - Proof generation takes ~1.5s on modern hardware (2.56MB WASM, 1376 constraints)
+  - Gas overhead: stealth protocol adds 711.92% over baseline swap (643k vs 79k gas)
+    - Breakdown: stealth transfer 29k, token ops 186k, commitment 140k, verify+release 288k
+  - Bond release via ZKP verification costs 287k gas (ecpairing precompile)
+  - All assertions passed: bond released, recipient received tokens (990 TokenB), events emitted
+  - E2E test provides comprehensive metrics: per-operation gas costs, total gas, proof time, overhead percentage
+---
+

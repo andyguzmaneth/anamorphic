@@ -205,7 +205,7 @@
         "Exit code 0 on success, non-zero on any assertion failure"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "This is the money shot for the dissertation. If this passes, the protocol works. A shell script orchestrating forge script + cargo run is fine. Alternatively, a single Rust binary that does everything is cleaner."
     },
     {

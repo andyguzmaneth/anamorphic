@@ -636,6 +636,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
+name = "e2e-test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ethers",
+ "hex",
+ "k256",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "stealth-crypto",
+ "tokio",
+]
+
+[[package]]
 name = "ecdsa"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
