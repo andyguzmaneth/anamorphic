@@ -222,7 +222,7 @@
         "Script runs without errors"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Use cast or eth_getBlock/eth_getTransaction RPC calls to pull tx data from Anvil. The analysis doesn't need to be sophisticated — basic heuristics are fine for a prototype. The key finding to prove: no deterministic on-chain link between deposit tx and swap output."
     },
     {

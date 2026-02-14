@@ -226,3 +226,23 @@
   - E2E test provides comprehensive metrics: per-operation gas costs, total gas, proof time, overhead percentage
 ---
 
+## 2026-02-13 - US-012
+- What was implemented: Privacy analysis script that analyzes on-chain footprint from Anvil after E2E test
+- Files changed:
+  - `relayer/privacy-analyzer/Cargo.toml` — new binary crate with ethers, tokio, anyhow, chrono dependencies
+  - `relayer/privacy-analyzer/src/main.rs` — privacy analyzer: linkability analysis, distinguishability analysis, relayer footprint analysis, gas overhead comparison, markdown report generation
+  - `relayer/Cargo.toml` — added privacy-analyzer to workspace members
+  - `analysis/privacy-report.md` — comprehensive privacy analysis report with findings and recommendations
+- **Learnings for future iterations:**
+  - Privacy analyzer connects to Anvil via ethers Provider and analyzes all blocks/transactions
+  - Linkability analysis: tracks sender→recipient mappings, identifies stealth transfers by calldata size (>33 bytes)
+  - Distinguishability analysis: compares gas/calldata/value between stealth and normal ETH transfers
+  - Relayer footprint: identifies stealth addresses (recipients of stealth transfers), finds executions FROM those addresses
+  - Gas overhead calculation requires transaction receipts (`provider.get_transaction_receipt(tx.hash)`)
+  - Report generation uses chrono for timestamps, creates analysis/ directory if needed
+  - Key findings: ✅ Strong sender/recipient/instruction privacy, ⚠️ Weak timing privacy (batching recommended), ❌ Distinguishable by calldata (but blends with other contract interactions)
+  - Privacy-preserving protocol adds 700%+ gas overhead over direct swap
+  - Recommendations: batching, calldata padding, decoy traffic, multi-hop routing, amount hiding
+  - cargo run --bin privacy-analyzer after E2E test generates analysis/privacy-report.md
+---
+
