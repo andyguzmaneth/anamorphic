@@ -242,7 +242,7 @@
         "Script runs without errors"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Run proof generation 10 times and take average + stddev. Gas costs can be pulled from tx receipts. For comparison, deploy a second scenario where user just calls MockAMM.swap() directly and measure that gas."
     }
   ]

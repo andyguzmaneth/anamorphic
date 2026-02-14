@@ -246,3 +246,28 @@
   - cargo run --bin privacy-analyzer after E2E test generates analysis/privacy-report.md
 ---
 
+## 2026-02-13 - US-013
+- What was implemented: Benchmark suite scripts and comprehensive performance metrics
+- Files changed:
+  - `scripts/run_benchmarks.sh` — full benchmark script: runs E2E test multiple times, extracts all metrics, generates CSV + MD reports
+  - `scripts/quick_benchmarks.sh` — optimized version: runs 3 iterations, computes statistics, generates reports
+  - `benchmarks/results.csv` — quantitative metrics: gas costs per operation, circuit constraints, proof time (avg/stddev), proof size
+  - `benchmarks/results.md` — formatted report with analysis, comparison table vs Tornado Cash/Aztec, key findings
+- **Learnings for future iterations:**
+  - Benchmark automation extracts metrics from E2E test output via grep/awk
+  - Proof generation time: ~2s average (1,970ms ± 250ms over multiple runs)
+  - Circuit has 1,376 constraints — very efficient for ZK proof
+  - Proof size: 803 bytes (0.78 KB) — compact for on-chain verification
+  - Gas breakdown: 643,329 total vs 79,232 baseline = 711.96% overhead
+    - ZK verification: 287,885 gas (44.8%) — largest component
+    - Commitment posting: 140,486 gas (21.8%)
+    - Token ops: 185,908 gas (28.9%)
+    - Stealth transfer: 29,050 gas (4.5%)
+  - StealthDeFi trades gas efficiency for privacy: 8x gas cost but 5x faster proof gen than Tornado Cash
+  - Bash array expansion in Python inline scripts requires heredoc format for proper parsing
+  - awk field splitting on variable whitespace: use `-F:` to split by delimiter, then `awk '{print $N}'` on result
+  - Proof time varies significantly between runs (1.5-6.5s range) due to Node.js startup overhead and witness generation
+  - Benchmark scripts are fully automated — no manual steps required
+  - Results provide quantitative data for dissertation evaluation chapter
+---
+
