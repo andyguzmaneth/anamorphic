@@ -161,3 +161,22 @@
   - Hardcoding proof values (Option 1 from PRD notes) works well for prototype testing — 6 tests with real + garbage proofs give good coverage
   - Gas cost for verifyAndRelease with valid proof: ~409k gas (including ecpairing precompile call)
 ---
+## 2026-02-13 - US-009
+- What was implemented: Rust relayer binary that monitors Anvil for stealth transfers and decrypts instructions
+- Files changed:
+  - `relayer/relayer/Cargo.toml` — added ethers, tokio, anyhow, serde, k256, rand dependencies
+  - `relayer/relayer/src/main.rs` — full relayer implementation: Anvil monitoring, stealth detection, instruction decryption, integration test
+  - `relayer/stealth-crypto/src/stealth_address.rs` — added `#[derive(Clone)]` to RelayerKeys
+  - `relayer/Cargo.lock` — updated with new dependencies (ethers 2.0.14 and 370+ transitive deps)
+  - `tasks/prd.json` — marked US-009 passes: true
+- **Learnings for future iterations:**
+  - ethers-rs 2.0 is large (370+ crates) but provides complete Ethereum tooling: Provider, Transaction, Address, MiddleWare
+  - `relayer_check_stealth` from stealth-crypto handles all ECDH + stealth derivation — don't reimplement this logic
+  - `decrypt_instruction` returns `Option<Instruction>` (not Result) — None indicates decryption failure (wrong key or tampered ciphertext)
+  - ethers `Transaction.input` is the calldata; `Transaction.to` is `Option<Address>` (None for contract creation)
+  - Relayer polls blocks with `get_block_with_txs()` to avoid separate tx lookups
+  - `RelayerKeys::generate(&mut rng)` requires explicit RNG argument — use `rand::thread_rng()` for tests
+  - Instruction `amount_in`/`min_amount_out` are `[u8; 32]` arrays (not U256) — use `hex::encode` for display
+  - Integration test is marked `#[ignore]` and requires Anvil running on port 8545 — run with `cargo test --bin relayer -- --ignored`
+  - Relayer binary can run as: `cargo run --bin relayer` (default http://127.0.0.1:8545) or with env vars: `RPC_URL=... POLL_INTERVAL_MS=...`
+---

@@ -163,7 +163,7 @@
         "cargo test passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Use ethers-rs Provider with HTTP transport for Anvil. Anvil default URL: http://127.0.0.1:8545. The relayer needs its own keypair loaded from env or config file. For the integration test, start Anvil as a child process or assume it's running."
     },
     {
