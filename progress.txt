@@ -180,3 +180,26 @@
   - Integration test is marked `#[ignore]` and requires Anvil running on port 8545 — run with `cargo test --bin relayer -- --ignored`
   - Relayer binary can run as: `cargo run --bin relayer` (default http://127.0.0.1:8545) or with env vars: `RPC_URL=... POLL_INTERVAL_MS=...`
 ---
+## 2026-02-13 - US-010
+- What was implemented: Full relayer execution flow — swap execution, commitment posting, ZK proof generation, and proof submission
+- Files changed:
+  - `relayer/relayer/src/main.rs` — added execute_instruction(), generate_proof(), create_proof_input() methods; contract ABI bindings via ethers abigen!; extended RelayerConfig with escrow_address, amm_address, bond_amount
+  - `tasks/prd.json` — marked US-010 passes: true
+- **Learnings for future iterations:**
+  - ethers `abigen!` macro generates type-safe contract bindings from forge-generated JSON artifacts — no need for forge bind or manual ABI definitions
+  - ABI paths in abigen! are relative to the crate root (use `../../contracts/out/...`)
+  - `relayer_recover_stealth_privkey` (not `relayer_derive_stealth_privkey`) returns k256::SecretKey which can be directly converted to ethers LocalWallet via `LocalWallet::from(signing_key)`
+  - SignerMiddleware wraps Provider with a wallet — use Arc<SignerMiddleware<...>> for cloning across contract instances
+  - MockERC20 approve + MockAMM swap + transfer flow works seamlessly with ethers contract bindings
+  - Swap event amountOut is in log.data (not topics) — parse with `U256::from_big_endian(&log.data[32..64])`
+  - CommitmentPosted event ID is in topics[1] (indexed uint256) — parse with `U256::from_big_endian(&log.topics[1].as_bytes())`
+  - snarkjs via `npx snarkjs groth16 fullprove` shell command works well — write input.json to temp dir, run command, parse proof.json + public.json
+  - Proof generation requires 5 files: input.json (generated), execution_proof.wasm, execution_proof_final.zkey, proof.json (output), public.json (output)
+  - Fp2 ordering reminder: proof.json has `pi_b: [[c0, c1], [c0, c1]]` but Solidity expects `[[c1, c0], [c1, c0]]` — swap when parsing
+  - Circuit input.json uses decimal strings for field elements — U256::from_big_endian().to_string() for addresses/amounts
+  - execution_timestamp can use SystemTime::now() — no need to query block.timestamp from chain
+  - Public inputs order: commitment_hash, expected_recipient, min_expected_amount, max_deadline (matches circuit declaration)
+  - Relayer can optionally execute if ESCROW_ADDRESS and AMM_ADDRESS env vars are set, otherwise detection-only mode
+  - cargo test passes with 16 unit tests in stealth-crypto + 1 non-ignored test in relayer (US-009 test is marked #[ignore])
+---
+

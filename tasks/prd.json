@@ -184,7 +184,7 @@
         "cargo test passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "For ZKP generation, shelling out to snarkjs via Command::new('node') is the simplest approach. Write input.json, run snarkjs groth16 fullprove, read proof.json. The relayer needs ABI bindings for StealthEscrow and MockAMM — generate with forge bind or manually define."
     },
     {
