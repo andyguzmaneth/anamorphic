@@ -419,7 +419,6 @@ impl E2ETest {
         execution_amount_out: U256,
     ) -> Result<([U256; 2], [[U256; 2]; 2], [U256; 2], [U256; 4])> {
         use std::fs;
-        use std::path::PathBuf;
 
         let temp_dir = std::env::temp_dir().join(format!("stealth-e2e-{}", rand::random::<u64>()));
         fs::create_dir_all(&temp_dir)?;
@@ -429,8 +428,13 @@ impl E2ETest {
         let input_path = temp_dir.join("input.json");
         fs::write(&input_path, input_json)?;
 
-        // Circuit artifacts paths - use absolute path from project root
-        let project_root = std::env::current_dir()?.parent().unwrap().to_path_buf();
+        // Circuit artifacts paths - use repo root (two levels up from relayer/e2e-test)
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let project_root = manifest_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .context("e2e-test crate expected under relayer/")?
+            .to_path_buf();
         let circuit_root = project_root.join("circuits/build");
         let wasm_path = circuit_root.join("execution_proof_js/execution_proof.wasm");
         let zkey_path = circuit_root.join("execution_proof_final.zkey");
@@ -508,7 +512,12 @@ impl E2ETest {
             "nonce": instruction.nonce.to_string(),
         });
 
-        let project_root = std::env::current_dir()?.parent().unwrap().to_path_buf();
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let project_root = manifest_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .context("e2e-test crate expected under relayer/")?
+            .to_path_buf();
         let poseidon_script = project_root.join("scripts/compute_poseidon.js");
 
         // Call Node.js script to compute Poseidon hash

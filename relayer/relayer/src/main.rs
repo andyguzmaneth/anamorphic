@@ -26,6 +26,7 @@ abigen!(
 /// Relayer configuration
 pub struct RelayerConfig {
     pub rpc_url: String,
+    pub chain_id: u64,
     pub poll_interval_ms: u64,
     pub relayer_keys: RelayerKeys,
     pub escrow_address: Option<Address>,
@@ -62,12 +63,18 @@ impl RelayerConfig {
             .and_then(|s| s.parse().ok())
             .unwrap_or_else(|| U256::from(1_000_000_000_000_000_000u64)); // 1 ETH default
 
+        let chain_id = std::env::var("CHAIN_ID")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(31337u64); // Anvil default; use 11155111 for Sepolia
+
         // For now, generate fresh keys. In production, load from secure storage.
         let mut rng = rand::thread_rng();
         let relayer_keys = RelayerKeys::generate(&mut rng);
 
         Ok(Self {
             rpc_url,
+            chain_id,
             poll_interval_ms,
             relayer_keys,
             escrow_address,
@@ -281,7 +288,7 @@ impl Relayer {
         let signing_key = SigningKey::from(stealth_privkey);
 
         // Create wallet from stealth private key
-        let wallet = LocalWallet::from(signing_key).with_chain_id(31337u64); // Anvil chain ID
+        let wallet = LocalWallet::from(signing_key).with_chain_id(self.config.chain_id);
         let wallet_address: Address = format!("0x{}", hex::encode(stealth_addr.address))
             .parse()
             .context("Invalid stealth address")?;
@@ -614,6 +621,7 @@ mod tests {
         // Now test the relayer detection logic
         let config = RelayerConfig {
             rpc_url: "http://127.0.0.1:8545".to_string(),
+            chain_id: 31337,
             poll_interval_ms: 1000,
             relayer_keys: relayer_keys.clone(),
             escrow_address: None,
@@ -641,6 +649,7 @@ mod tests {
     fn test_config_from_defaults() {
         let config = RelayerConfig::from_env().unwrap();
         assert_eq!(config.rpc_url, "http://127.0.0.1:8545");
+        assert_eq!(config.chain_id, 31337);
         assert_eq!(config.poll_interval_ms, 2000);
     }
 }

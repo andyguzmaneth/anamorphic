@@ -120,6 +120,41 @@ cd relayer && cargo test
 cargo run --bin e2e-test --manifest-path relayer/Cargo.toml
 ```
 
+### Deploy on testnet (e.g. Sepolia)
+
+1. **Build contracts**  
+   `cd contracts && forge build && cd ..`
+
+2. **Fund a deployer wallet**  
+   Get testnet ETH from a [Sepolia faucet](https://sepoliafaucet.com/) (or use another testnet; adjust RPC and chain ID below).
+
+3. **Deploy**  
+   Set your RPC URL and deployer private key, then run the full deploy script:
+
+   ```bash
+   cd contracts
+   forge script script/Deploy.s.sol:Deploy \
+     --rpc-url "https://rpc.sepolia.org" \
+     --broadcast \
+     --private-key $PRIVATE_KEY
+   cd ..
+   ```
+
+   The script deploys Groth16Verifier → StealthEscrow → TokenA, TokenB → MockAMM, mints 1M of each token to the deployer, and adds 100k liquidity. At the end it prints `ESCROW_ADDRESS` and `AMM_ADDRESS`; use those for the relayer.
+
+4. **Run the relayer**  
+   Point the relayer at your testnet deployment:
+
+   ```bash
+   export RPC_URL="https://rpc.sepolia.org"
+   export CHAIN_ID=11155111
+   export ESCROW_ADDRESS=<from deploy output>
+   export AMM_ADDRESS=<from deploy output>
+   cargo run --bin relayer --manifest-path relayer/Cargo.toml
+   ```
+
+   The relayer uses `CHAIN_ID` for signing (31337 = Anvil, 11155111 = Sepolia). It loads `ESCROW_ADDRESS` and `AMM_ADDRESS` from the environment; without them it will not process transfers.
+
 ### Privacy Analysis & Benchmarks
 
 ```bash
